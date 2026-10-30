@@ -40,7 +40,7 @@ def get_gspread_sheet():
             gc = gspread.authorize(creds)
             
             # Open the Google Sheet by name (Ensure you share this sheet with your service account email)
-            sheet_name = st.secrets.get("GOOGLE_SHEET_NAME", "Bank_RAG_Audit_Database")
+            sheet_name = st.secrets.get("GOOGLE_SHEET_NAME", "depo_rag_receipts")
             sheet = gc.open(sheet_name).sheet1
             return sheet
         else:
@@ -55,8 +55,8 @@ sheet_db = get_gspread_sheet()
 BANK_CONFIGS = {
     "bofa": {
         "display_name": "Bank of America",
-        "primary": "#012169",  # Navy Blue
-        "accent": "#E31837"    # Crimson Red
+        "primary": "#E31837",  # Crimson Red
+        "accent":  "#012169"   # Navy Blue
     },
     "usbank": {
         "display_name": "U.S. Bank",
@@ -66,7 +66,7 @@ BANK_CONFIGS = {
     "chase": {
         "display_name": "Chase",
         "primary": "#117ACA",  # Chase Blue
-        "accent": "#211E1E"    # Dark Onyx
+        "accent": "#117ACA"    # Chase Blue
     },
     "wellsfargo": {
         "display_name": "Wells Fargo",
@@ -84,7 +84,7 @@ def get_bank_config(col_name):
     return {"display_name": formatted, "primary": "#1f77b4", "accent": "#ff7f0e"}
 
 # --- 4. SIDEBAR: BANK SELECTION & STYLING ---
-st.sidebar.title("🏦 Bank Selection")
+st.sidebar.title("Bank Selection")
 
 try:
     collections = chroma_client.list_collections()
@@ -98,7 +98,7 @@ if not collection_list:
     bank_cfg = {"display_name": "None", "primary": "#111111", "accent": "#888888"}
 else:
     col_display_map = {col: get_bank_config(col)["display_name"] for col in collection_list}
-    selected_col = st.sidebar.selectbox("Select Institution:", list(col_display_map.keys()), format_func=lambda x: col_display_map[x])
+    selected_col = st.sidebar.selectbox("Select your bank:", list(col_display_map.keys()), format_func=lambda x: col_display_map[x])
     bank_cfg = get_bank_config(selected_col)
 
 # --- APPLY SIDEBAR SPLIT GRADIENT (Top = Accent, Bottom = Primary) ---
@@ -109,8 +109,8 @@ st.markdown(
             background: linear-gradient(
                 to bottom, 
                 {bank_cfg['accent']} 0%, 
-                {bank_cfg['accent']} 50%, 
-                {bank_cfg['primary']} 50%, 
+                {bank_cfg['accent']} 25%, 
+                {bank_cfg['primary']} 25%, 
                 {bank_cfg['primary']} 100%
             ) !important;
             color: #FFFFFF !important;
@@ -130,7 +130,7 @@ st.markdown(
 st.sidebar.markdown("---")
 
 # --- UNIQUE RESPONSE CODE LOOKUP SECTION ---
-st.sidebar.subheader("🔍 Response Inspector")
+st.sidebar.subheader("Response Inspector")
 lookup_code = st.sidebar.text_input("Enter Response Code:", placeholder="e.g., RAG-A1B2C3")
 if lookup_code:
     if "response_metadata_store" in st.session_state and lookup_code.strip() in st.session_state.response_metadata_store:
@@ -148,7 +148,7 @@ st.sidebar.info(
 )
 
 # --- 5. MAIN INTERFACE & ONBOARDING STARTER QUESTIONS ---
-st.title(f"📄 {bank_cfg['display_name']} Agreement Assistant")
+st.title(f"{bank_cfg['display_name']} Agreement Assistant")
 
 with st.expander("Getting started:", expanded=True):
     st.markdown(
@@ -184,7 +184,7 @@ for idx, message in enumerate(st.session_state.messages):
             code = message["response_code"]
             col_a, col_b = st.columns([3, 1])
             with col_a:
-                st.caption(f"🔑 Response Code: `{code}` (Paste in sidebar to inspect)")
+                st.caption(f"Response Code: `{code}` (Paste in sidebar to inspect)")
             with col_b:
                 feedback = st.radio("Was this helpful?", ["👍", "👎"], key=f"fb_{code}", label_visibility="collapsed", horizontal=True)
 # --- 6. RAG QUERY EXECUTION & GOOGLE SHEETS LOGGING ---
@@ -260,7 +260,7 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                     answer_text += "\n\n**Sources Referenced:**\n" + "\n".join(sources_cited)
 
                 response_code = f"RAG-{uuid.uuid4().hex[:6].upper()}"
-                answer_text += f"\n\n--- \n🔑 *Response ID Code: `{response_code}`*"
+                answer_text += f"\n\n--- \n*Response ID Code: `{response_code}`*"
 
                 audit_record = {
                     "response_code": response_code,
