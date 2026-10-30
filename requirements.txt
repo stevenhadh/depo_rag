@@ -1,5 +1,7 @@
 chromadb==1.5.9
+google-auth==2.62.0
 google-genai==2.34.0
+gspread
 langchain==1.4.7
 langgraph==1.2.18
 langsmith==0.14.16
