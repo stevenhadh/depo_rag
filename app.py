@@ -5,6 +5,8 @@ import streamlit as st
 import chromadb
 from google import genai
 from google.genai import types
+import gspread
+from google.oauth2.service_account import Credentials
 
 # --- 1. CONFIGURATION & CLIENT SETUP ---
 st.set_page_config(page_title="Multi-Bank RAG Assistant", layout="wide")
@@ -12,7 +14,7 @@ st.set_page_config(page_title="Multi-Bank RAG Assistant", layout="wide")
 # Initialize Gemini Client
 api_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY", "")
 if not api_key:
-    st.error("Error: No API KEY")
+    st.error("⚠️ GEMINI_API_KEY not found! Please set it in your environment variables or Streamlit secrets.")
     st.stop()
 
 ai_client = genai.Client(api_key=api_key)
@@ -24,8 +26,32 @@ def get_chroma_client():
 
 chroma_client = get_chroma_client()
 
-# --- 2. MAPPINGS & CONFIGS ---
-# Map raw collection names / identifiers to clean display names and color themes
+# --- 2. GOOGLE SHEETS CONNECTION SETUP ---
+@st.cache_resource
+def get_gspread_sheet():
+    try:
+        # Pulls service account dictionary directly from Streamlit secrets
+        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        
+        # Load credentials from st.secrets
+        if "gcp_service_account" in st.secrets:
+            creds_dict = dict(st.secrets["gcp_service_account"])
+            creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+            gc = gspread.authorize(creds)
+            
+            # Open the Google Sheet by name (Ensure you share this sheet with your service account email)
+            sheet_name = st.secrets.get("GOOGLE_SHEET_NAME", "Bank_RAG_Audit_Database")
+            sheet = gc.open(sheet_name).sheet1
+            return sheet
+        else:
+            return None
+    except Exception as e:
+        st.sidebar.error(f"Google Sheets Connection Warning: {e}")
+        return None
+
+sheet_db = get_gspread_sheet()
+
+# --- 3. MAPPINGS & CONFIGS ---
 BANK_CONFIGS = {
     "bofa": {
         "display_name": "Bank of America",
@@ -49,17 +75,15 @@ BANK_CONFIGS = {
     }
 }
 
-# Fallback helper for any collection names not explicitly in the map
 def get_bank_config(col_name):
     clean_key = col_name.replace("doc_", "").lower()
     for key, cfg in BANK_CONFIGS.items():
         if key in clean_key:
             return cfg
-    # Default fallback formatting
     formatted = col_name.replace("doc_", "").replace("_", " ").title()
     return {"display_name": formatted, "primary": "#1f77b4", "accent": "#ff7f0e"}
 
-# --- 3. SIDEBAR: BANK SELECTION & LOOKUP ---
+# --- 4. SIDEBAR: BANK SELECTION & STYLING ---
 st.sidebar.title("🏦 Bank Selection")
 
 try:
@@ -69,39 +93,36 @@ except Exception:
     collection_list = []
 
 if not collection_list:
-    st.sidebar.warning("No docs found in ChromaDB, run chunking")
+    st.sidebar.warning("No bank documents found in ChromaDB yet! Run your chunking script first.")
     selected_col = None
     bank_cfg = {"display_name": "None", "primary": "#111111", "accent": "#888888"}
 else:
-    # Build selectbox mapping collection names to display names
     col_display_map = {col: get_bank_config(col)["display_name"] for col in collection_list}
     selected_col = st.sidebar.selectbox("Select Institution:", list(col_display_map.keys()), format_func=lambda x: col_display_map[x])
     bank_cfg = get_bank_config(selected_col)
 
-# --- APPLY DYNAMIC THEME & BOTTOM UNDERLINE ---
+# --- APPLY SIDEBAR SPLIT GRADIENT (Top = Accent, Bottom = Primary) ---
 st.markdown(
     f"""
     <style>
-        /* Main background subtle accent tint */
-        .stApp {{
-            background: linear-gradient(to bottom, {bank_cfg['primary']}0D, #FFFFFF 20%);
-        }}
-        /* Bottom accent underline banner */
-        .bottom-underline {{
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 6px;
-            background-color: {bank_cfg['accent']};
-            z-index: 99999;
-        }}
-        /* Sidebar styling accent */
         [data-testid="stSidebar"] {{
-            border-right: 2px solid {bank_cfg['primary']}33;
+            background: linear-gradient(
+                to bottom, 
+                {bank_cfg['accent']} 0%, 
+                {bank_cfg['accent']} 50%, 
+                {bank_cfg['primary']} 50%, 
+                {bank_cfg['primary']} 100%
+            ) !important;
+            color: #FFFFFF !important;
+        }}
+        [data-testid="stSidebar"] h1, 
+        [data-testid="stSidebar"] h2, 
+        [data-testid="stSidebar"] h3, 
+        [data-testid="stSidebar"] label, 
+        [data-testid="stSidebar"] .stMarkdown {{
+            color: #FFFFFF !important;
         }}
     </style>
-    <div class="bottom-underline"></div>
     """,
     unsafe_allow_html=True
 )
@@ -122,13 +143,28 @@ if lookup_code:
 
 st.sidebar.markdown("---")
 st.sidebar.info(
-    "**Demo Safety Note:**\n"
+    "💡 **Demo Safety Note:**\n"
     "Powered by the Gemini Free Tier. If request volumes exceed limits, "
     "requests will pause with zero financial charge."
 )
 
-# --- 4. MAIN INTERFACE ---
+# --- 5. MAIN INTERFACE & ONBOARDING STARTER QUESTIONS ---
 st.title(f"📄 {bank_cfg['display_name']} Agreement Assistant")
+
+with st.expander("👋 Welcome! How to use this assistant & Sample Questions", expanded=True):
+    st.markdown(
+        """
+        This tool searches official **Bank Deposit Agreements and Account Disclosures** using Retrieval-Augmented Generation (RAG). 
+        You can ask specific questions regarding fees, requirements, interest tiers, and terms.
+        
+        **Sample questions you can try:**
+        * *What are the monthly maintenance fees and how can they be waived?*
+        * *What is the bank's policy regarding overdraft fees and returned items?*
+        * *How are interest rates calculated and compounded for relationship tiers?*
+        * *What are the requirements for closing an account or disputing a transaction?*
+        """
+    )
+
 if not selected_col:
     st.warning("Please index at least one bank agreement into ChromaDB to begin.")
     st.stop()
@@ -145,7 +181,6 @@ if "response_metadata_store" not in st.session_state:
 for idx, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        # If assistant message has an associated metadata code, display it & feedback
         if message["role"] == "assistant" and "response_code" in message:
             code = message["response_code"]
             col_a, col_b = st.columns([3, 1])
@@ -154,9 +189,8 @@ for idx, message in enumerate(st.session_state.messages):
             with col_b:
                 feedback = st.radio("Was this helpful?", ["👍 Yes", "👎 No", "None"], key=f"fb_{code}", label_visibility="collapsed", horizontal=True)
 
-# --- 5. RAG QUERY EXECUTION & METADATA TRACKING ---
+# --- 6. RAG QUERY EXECUTION & GOOGLE SHEETS LOGGING ---
 if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."):
-    # Append user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -164,13 +198,12 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
     with st.chat_message("assistant"):
         with st.spinner("Searching document sections and generating response..."):
             try:
-                # Parameters config
                 n_results = 3
                 temperature = 0.2
-                llm_model = "gemini-3.8-flash"
-                embedding_model = "Chroma Default (all-MiniLM-L6-v2)"
+                llm_model = "gemini-2.5-flash"
+                embedding_model = "Chroma Default (all-MiniLM-L6-v2 compatible)"
 
-                # Step A: Retrieve relevant context from ChromaDB
+                # Retrieve relevant context from ChromaDB
                 results = collection.query(
                     query_texts=[prompt],
                     n_results=n_results,
@@ -181,7 +214,6 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                 retrieved_metas = results.get("metadatas", [[]])[0]
                 retrieved_distances = results.get("distances", [[]])[0] if "distances" in results else [0.0] * len(retrieved_docs)
                 
-                # Format context package and compile chunk metadata details
                 context_block = ""
                 sources_cited = set()
                 chunks_referenced_audit = []
@@ -203,7 +235,6 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                         "content_snippet": doc[:150] + "..."
                     })
 
-                # Step B: Construct prompt instructions
                 system_instruction = (
                     "You are a precise, helpful banking assistant. Answer the user's question "
                     "strictly using the provided context excerpts from the banking agreement. "
@@ -216,7 +247,6 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                     f"Retrieved Document Context:\n{context_block}"
                 )
 
-                # Step C: Call Gemini
                 response = ai_client.models.generate_content(
                     model=llm_model,
                     contents=user_prompt,
@@ -231,11 +261,9 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                 if sources_cited:
                     answer_text += "\n\n**Sources Referenced:**\n" + "\n".join(sources_cited)
 
-                # Generate unique response code
                 response_code = f"RAG-{uuid.uuid4().hex[:6].upper()}"
                 answer_text += f"\n\n--- \n🔑 *Response ID Code: `{response_code}`*"
 
-                # Save comprehensive metadata record
                 audit_record = {
                     "response_code": response_code,
                     "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -248,26 +276,36 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                         "temperature": temperature,
                         "top_k_results": n_results
                     },
-                    "assistant_response": answer_text,
-                    "chunks_referenced": chunks_referenced_audit,
-                    "sources_cited": list(sources_cited)
+                    "chunks_referenced": chunks_referenced_audit
                 }
 
                 st.session_state.response_metadata_store[response_code] = audit_record
 
+                # --- ACTIVE GOOGLE SHEETS WRITE ---
+                if sheet_db:
+                    try:
+                        sheet_db.append_row([
+                            audit_record["timestamp"],
+                            audit_record["response_code"],
+                            audit_record["bank_institution"],
+                            audit_record["user_query"],
+                            str(audit_record["chunks_referenced"]),
+                            "Pending Feedback"
+                        ])
+                    except Exception as sheet_err:
+                        st.sidebar.warning(f"Could not write to Google Sheet: {sheet_err}")
+
                 st.markdown(answer_text)
                 
-                # Append to messages with response code attached
                 st.session_state.messages.append({
                     "role": "assistant", 
                     "content": answer_text,
                     "response_code": response_code
                 })
                 
-                # Show feedback widget immediately for new message
-                st.radio("Was this helpful?", ["👍 Yes", "👎 No", "None"], key=f"fb_{response_code}", label_visibility="collapsed", horizontal=True)
+                st.radio("Was this helpful?", ["👍 Yes", "👎 No", "None"], key=f`fb_{response_code}`, label_visibility="collapsed", horizontal=True)
 
             except Exception as e:
-                error_msg = f"**Usage Limit / Error Encountered:** `{str(e)}`\n\nThe free-tier usage limit has been reached or a network error occurred. Please wait a moment before trying again."
+                error_msg = f"⚠️ **Usage Limit / Error Encountered:** `{str(e)}`\n\nThe free-tier usage limit has been reached or a network error occurred. Please wait a moment before trying again."
                 st.error(error_msg)
                 st.session_state.messages.append({"role": "assistant", "content": error_msg})
