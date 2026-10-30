@@ -14,7 +14,7 @@ st.set_page_config(page_title="Multi-Bank RAG Assistant", layout="wide")
 # Initialize Gemini Client
 api_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY", "")
 if not api_key:
-    st.error("⚠️ GEMINI_API_KEY not found! Please set it in your environment variables or Streamlit secrets.")
+    st.error("Error: No API Key")
     st.stop()
 
 ai_client = genai.Client(api_key=api_key)
@@ -93,7 +93,7 @@ except Exception:
     collection_list = []
 
 if not collection_list:
-    st.sidebar.warning("No bank documents found in ChromaDB yet! Run your chunking script first.")
+    st.sidebar.warning("No docs found in ChromaDB, run chunks")
     selected_col = None
     bank_cfg = {"display_name": "None", "primary": "#111111", "accent": "#888888"}
 else:
@@ -130,28 +130,27 @@ st.markdown(
 st.sidebar.markdown("---")
 
 # --- UNIQUE RESPONSE CODE LOOKUP SECTION ---
-st.sidebar.subheader("🔍 Metadata Inspector")
+st.sidebar.subheader("🔍 Response Inspector")
 lookup_code = st.sidebar.text_input("Enter Response Code:", placeholder="e.g., RAG-A1B2C3")
 if lookup_code:
     if "response_metadata_store" in st.session_state and lookup_code.strip() in st.session_state.response_metadata_store:
-        st.sidebar.success("Found matching response audit record!")
+        st.sidebar.success("Found response receipt")
         meta_record = st.session_state.response_metadata_store[lookup_code.strip()]
-        with st.sidebar.expander("View Audit Details", expanded=True):
+        with st.sidebar.expander("View Details", expanded=True):
             st.json(meta_record)
     else:
         st.sidebar.error("Code not found in session history.")
 
 st.sidebar.markdown("---")
 st.sidebar.info(
-    "💡 **Demo Safety Note:**\n"
-    "Powered by the Gemini Free Tier. If request volumes exceed limits, "
-    "requests will pause with zero financial charge."
+    "**Note:**\n"
+    "Powered by Gemini's free tier. Might be slow, might stop working."
 )
 
 # --- 5. MAIN INTERFACE & ONBOARDING STARTER QUESTIONS ---
 st.title(f"📄 {bank_cfg['display_name']} Agreement Assistant")
 
-with st.expander("👋 Welcome! How to use this assistant & Sample Questions", expanded=True):
+with st.expander("Getting started:", expanded=True):
     st.markdown(
         """
         This tool searches official **Bank Deposit Agreements and Account Disclosures** using Retrieval-Augmented Generation (RAG). 
@@ -185,9 +184,9 @@ for idx, message in enumerate(st.session_state.messages):
             code = message["response_code"]
             col_a, col_b = st.columns([3, 1])
             with col_a:
-                st.caption(f"🔑 Response Code: `{code}` (Paste in sidebar to inspect metadata)")
+                # st.caption(f"🔑 Response Code: `{code}` (Paste in sidebar to inspect)")
             with col_b:
-                feedback = st.radio("Was this helpful?", ["👍 Yes", "👎 No", "None"], key=f"fb_{code}", label_visibility="collapsed", horizontal=True)
+                feedback = st.radio("Was this helpful?", ["👍", "👎"], key=f"fb_{code}", label_visibility="collapsed", horizontal=True)
 
 # --- 6. RAG QUERY EXECUTION & GOOGLE SHEETS LOGGING ---
 if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."):
@@ -200,8 +199,8 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
             try:
                 n_results = 3
                 temperature = 0.2
-                llm_model = "gemini-2.5-flash"
-                embedding_model = "Chroma Default (all-MiniLM-L6-v2 compatible)"
+                llm_model = "gemini-3.8-flash"
+                embedding_model = "all-MiniLM-L6-v2"
 
                 # Retrieve relevant context from ChromaDB
                 results = collection.query(
@@ -238,8 +237,8 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                 system_instruction = (
                     "You are a precise, helpful banking assistant. Answer the user's question "
                     "strictly using the provided context excerpts from the banking agreement. "
-                    "If the answer cannot be found in the context, state clearly that the document "
-                    "does not cover it. Always cite the relevant section title and page number."
+                    "If the answer cannot be found in the context, state clearly that the document does not cover it. "
+                    "Always state the name of the bank, and cite the relevant section title and page number."
                 )
 
                 user_prompt = (
@@ -276,7 +275,9 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                         "temperature": temperature,
                         "top_k_results": n_results
                     },
-                    "chunks_referenced": chunks_referenced_audit
+                    "assistant_response": answer_text,
+                    "chunks_referenced": chunks_referenced_audit,
+                    "sources_cited": list(sources_cited)
                 }
 
                 st.session_state.response_metadata_store[response_code] = audit_record
@@ -303,9 +304,9 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                     "response_code": response_code
                 })
                 
-                st.radio("Was this helpful?", ["👍 Yes", "👎 No", "None"], key=f`fb_{response_code}`, label_visibility="collapsed", horizontal=True)
+                st.radio("Was this helpful?", ["👍", "👎"], key=f`fb_{response_code}`, label_visibility="collapsed", horizontal=True)
 
             except Exception as e:
-                error_msg = f"⚠️ **Usage Limit / Error Encountered:** `{str(e)}`\n\nThe free-tier usage limit has been reached or a network error occurred. Please wait a moment before trying again."
+                error_msg = f"**Usage Limit / Error Encountered:** `{str(e)}`\n\nThe free-tier usage limit has been reached or a network error occurred. Please wait a moment before trying again."
                 st.error(error_msg)
                 st.session_state.messages.append({"role": "assistant", "content": error_msg})
