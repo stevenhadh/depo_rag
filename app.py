@@ -186,8 +186,7 @@ for idx, message in enumerate(st.session_state.messages):
             with col_a:
                 st.caption(f"🔑 Response Code: `{code}` (Paste in sidebar to inspect)")
             with col_b:
-                feedback = st.radio("Was this helpful?", ["👍", "👎"], key=f"fb_{code}", label_visibility="collapsed", horizontal=True)
-
+                feedback = st.radio("Was this helpful?", ["👍 Yes", "👎 No", "None"], key=f"fb_{code}", label_visibility="collapsed", horizontal=True)
 # --- 6. RAG QUERY EXECUTION & GOOGLE SHEETS LOGGING ---
 if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -304,7 +303,7 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                     "response_code": response_code
                 })
                 
-                st.radio("Was this helpful?", ["👍", "👎"], key=f`fb_{response_code}`, label_visibility="collapsed", horizontal=True)
+                st.radio("Was this helpful?", ["👍 Yes", "👎 No", "None"], key=f`fb_{response_code}`, label_visibility="collapsed", horizontal=True)
 
             except Exception as e:
                 error_msg = f"**Usage Limit / Error Encountered:** `{str(e)}`\n\nThe free-tier usage limit has been reached or a network error occurred. Please wait a moment before trying again."
