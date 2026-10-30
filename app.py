@@ -184,7 +184,7 @@ for idx, message in enumerate(st.session_state.messages):
             code = message["response_code"]
             col_a, col_b = st.columns([3, 1])
             with col_a:
-                # st.caption(f"🔑 Response Code: `{code}` (Paste in sidebar to inspect)")
+                st.caption(f"🔑 Response Code: `{code}` (Paste in sidebar to inspect)")
             with col_b:
                 feedback = st.radio("Was this helpful?", ["👍", "👎"], key=f"fb_{code}", label_visibility="collapsed", horizontal=True)
 
