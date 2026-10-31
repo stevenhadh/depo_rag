@@ -79,13 +79,13 @@ BANK_CONFIGS = {
     },
     "chase": {
         "display_name": "Chase",
-        "primary": "#3D428B",  # Royal Blue
-        "accent": "#3D428B"    # Royal Blue
+        "primary": "#4169E1",  # Royal Blue
+        "accent": "#4169E1"    # Royal Blue
     },
     "wellsfargo": {
         "display_name": "Wells Fargo",
         "primary": "#BB0826",  # Wells Fargo Red
-        "accent": "#B59410"    # Dark Gold
+        "accent": "#dbb404"    # Dark Gold
     }
 }
 
