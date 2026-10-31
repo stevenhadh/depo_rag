@@ -264,7 +264,7 @@ with st.expander("Getting started:", expanded=True):
         * *How much is the fee if my account goes negative?*
 
         **Note:**
-        Powered by Gemini's free tier. Takes a minute or two to generate.
+        Running on Gemini's free tier. Will pause if rate limits are reached.
         """
     )
 
