@@ -282,7 +282,7 @@ for idx, message in enumerate(st.session_state.messages):
             code = message["response_code"]
             col_a, col_b = st.columns([3, 1])
             with col_a:
-                st.caption(f"Response Code: `{code}` (Paste in sidebar to inspect)")
+                # st.caption(f"Response Code: `{code}` (Paste in sidebar to inspect)")
             with col_b:
                 current_vote = st.session_state.user_votes.get(code, None)
                 default_idx = 0 if current_vote == "👍" else (1 if current_vote == "👎" else None)
@@ -348,10 +348,10 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                     })
 
                 system_instruction = (
-                    f"You are a precise, helpful banking assistant representing {current_bank_name}. "
+                    f"You are a precise, helpful general banking assistant. You are NOT representing any specific bank. "
                     "Answer the user's question strictly using the provided context excerpts from the banking agreement. "
                     "If the answer cannot be found in the context, state clearly that the document does not cover it. "
-                    f"You must explicitly state that you are answering on behalf of {current_bank_name} in your response, "
+                    f"You must explicitly state that you are answering according to {current_bank_name}'s deposit agreement in your response, "
                     "and cite the relevant section title and page number."
                 )
 
