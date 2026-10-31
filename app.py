@@ -188,22 +188,6 @@ st.markdown(
             border: 1px solid rgba(255, 255, 255, 0.3) !important;
             border-radius: 6px;
         }}
-        
-        /* Force expander header text to be white statically */
-        [data-testid="stSidebar"] [data-testid="stExpander"] summary,
-        [data-testid="stSidebar"] [data-testid="stExpander"] summary p,
-        [data-testid="stSidebar"] [data-testid="stExpander"] span {{
-            color: #FFFFFF !important;
-        }}
-        
-        /* LOCK HOVER STATES: Prevent background or border color change on mouseover */
-        [data-testid="stSidebar"] [data-testid="stExpander"] summary:hover,
-        [data-testid="stSidebar"] [data-testid="stExpander"] details:hover,
-        [data-testid="stSidebar"] [data-testid="stExpander"] div:hover {{
-            background-color: rgba(255, 255, 255, 0.1) !important;
-            border-color: rgba(255, 255, 255, 0.3) !important;
-            color: #FFFFFF !important;
-        }}
     </style>
     """,
     unsafe_allow_html=True
@@ -252,8 +236,7 @@ if lookup_code:
                 handle_vote(clean_lookup, sb_feedback)
                 st.rerun()
     else:
-        st.sidebar.container(border=True)
-        st.write("Code not found.")
+        st.sidebar.warning("Code not found.")
 
 # --- 5. MAIN INTERFACE & ONBOARDING STARTER QUESTIONS ---
 st.title(f"{bank_cfg['display_name']} Agreement Assistant")
