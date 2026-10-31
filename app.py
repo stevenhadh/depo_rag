@@ -79,13 +79,13 @@ BANK_CONFIGS = {
     },
     "chase": {
         "display_name": "Chase",
-        "primary": "#117ACA",  # Chase Blue
-        "accent": "#117ACA"    # Chase Blue
+        "primary": "#3D428B",  # Royal Blue
+        "accent": "#3D428B"    # Royal Blue
     },
     "wellsfargo": {
         "display_name": "Wells Fargo",
         "primary": "#BB0826",  # Wells Fargo Red
-        "accent": "#FCC60A"    # Stagecoach Yellow
+        "accent": "#B59410"    # Dark Gold
     }
 }
 
@@ -182,31 +182,48 @@ st.markdown(
         [data-testid="stSidebar"] .stMarkdown {{
             color: #FFFFFF !important;
         }}
+    /* --- 2. EXPANDER FIX (Readable text & translucent container) --- */
+        [data-testid="stSidebar"] [data-testid="stExpander"] {{
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            border: 1px solid rgba(255, 255, 255, 0.3) !important;
+            border-radius: 6px;
+        }}
+        [data-testid="stSidebar"] [data-testid="stExpander"] summary,
+        [data-testid="stSidebar"] [data-testid="stExpander"] summary p,
+        [data-testid="stSidebar"] [data-testid="stExpander"] span {{
+            color: #FFFFFF !important;
+        }}
+        [data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {{
+            background-color: rgba(255, 255, 255, 0.2) !important;
+        }}
+
+        /* --- 3. SUCCESS ALERT (Changed from Green to Clean White) --- */
+        [data-testid="stSidebar"] .stSuccess {{
+            background-color: #FFFFFF !important;
+            color: #111111 !important;
+            border: 1px solid #DDDDDD !important;
+        }}
+        [data-testid="stSidebar"] .stSuccess p, 
+        [data-testid="stSidebar"] .stSuccess svg {{
+            color: #111111 !important;
+            fill: #111111 !important;
+        }}
+
+        /* --- 4. ERROR ALERT (Changed from Red to Neutral Gray) --- */
+        [data-testid="stSidebar"] .stError {{
+            background-color: #E5E7EB !important;
+            color: #1F2937 !important;
+            border: 1px solid #9CA3AF !important;
+        }}
+        [data-testid="stSidebar"] .stError p, 
+        [data-testid="stSidebar"] .stError svg {{
+            color: #1F2937 !important;
+            fill: #1F2937 !important;
+        }}
     </style>
     """,
     unsafe_allow_html=True
 )
-
-st.markdown(
-    """
-    <style>
-    /* Change background and text color for success in the sidebar */
-    [data-testid="stSidebar"] .stSuccess {
-        background-color: #d4edda;
-        color: #155724;
-    }
-    
-    /* Change background and text color for error in the sidebar */
-    [data-testid="stSidebar"] .stError {
-        background-color: #f8d7da;
-        color: #721c24;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-
 
 st.sidebar.markdown("---")
 
@@ -233,7 +250,7 @@ if lookup_code:
 
     if found_record:
         st.sidebar.success("Found response receipt")
-        with st.sidebar.expander("View Details & Vote", expanded=True):
+        with st.sidebar.expander("View Details", expanded=True):
             st.json(found_record)
             
             # Sidebar Voting Widget
