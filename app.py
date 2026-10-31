@@ -97,6 +97,52 @@ def get_bank_config(col_name):
     formatted = col_name.replace("doc_", "").replace("_", " ").title()
     return {"display_name": formatted, "primary": "#1f77b4", "accent": "#ff7f0e"}
 
+# Initialize session state stores
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "response_metadata_store" not in st.session_state:
+    st.session_state.response_metadata_store = {}
+if "user_votes" not in st.session_state:
+    st.session_state.user_votes = {}  # Tracks response_code -> "👍" or "👎"
+
+# --- HELPER: SMART VOTE HANDLER (PREVENTS DOUBLE COUNTING) ---
+def handle_vote(target_code, new_vote):
+    old_vote = st.session_state.user_votes.get(target_code)
+    if old_vote == new_vote:
+        return  # No change made
+    
+    # Update local vote state
+    st.session_state.user_votes[target_code] = new_vote
+    
+    # Update Google Sheets counters intelligently using deltas
+    if sheet_db:
+        try:
+            cell = sheet_db.find(target_code)
+            if cell:
+                row_idx = cell.row
+                up_col_idx = 10   # "Thumbs Up Count" column
+                down_col_idx = 11 # "Thumbs Down Count" column
+                
+                current_up = int(sheet_db.cell(row_idx, up_col_idx).value or 0)
+                current_down = int(sheet_db.cell(row_idx, down_col_idx).value or 0)
+                
+                # Revert old vote if it existed
+                if old_vote == "👍":
+                    current_up = max(0, current_up - 1)
+                elif old_vote == "👎":
+                    current_down = max(0, current_down - 1)
+                
+                # Apply new vote
+                if new_vote == "👍":
+                    current_up += 1
+                elif new_vote == "👎":
+                    current_down += 1
+                
+                sheet_db.update_cell(row_idx, up_col_idx, current_up)
+                sheet_db.update_cell(row_idx, down_col_idx, current_down)
+        except Exception:
+            pass
+
 # --- 4. SIDEBAR: BANK SELECTION & STYLING ---
 st.sidebar.title("Bank Selection")
 
@@ -123,8 +169,8 @@ st.markdown(
             background: linear-gradient(
                 to bottom, 
                 {bank_cfg['accent']} 0%, 
-                {bank_cfg['accent']} 25%, 
-                {bank_cfg['primary']} 25%, 
+                {bank_cfg['accent']} 33%, 
+                {bank_cfg['primary']} 33%, 
                 {bank_cfg['primary']} 100%
             ) !important;
             color: #FFFFFF !important;
@@ -141,9 +187,30 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+st.markdown(
+    """
+    <style>
+    /* Change background and text color for success in the sidebar */
+    [data-testid="stSidebar"] .stSuccess {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    /* Change background and text color for error in the sidebar */
+    [data-testid="stSidebar"] .stError {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+
 st.sidebar.markdown("---")
 
-# --- UNIQUE RESPONSE CODE LOOKUP SECTION (LOCAL + GOOGLE SHEETS) ---
+# --- UNIQUE RESPONSE CODE LOOKUP & SIDEBAR VOTING SECTION ---
 st.sidebar.subheader("Response Inspector")
 lookup_code = st.sidebar.text_input("Enter Response Code:", placeholder="e.g., RAG-A1B2C3")
 if lookup_code:
@@ -151,9 +218,9 @@ if lookup_code:
     found_record = None
     
     # 1. Check local session state first
-    if "response_metadata_store" in st.session_state and clean_lookup in st.session_state.response_metadata_store:
+    if clean_lookup in st.session_state.response_metadata_store:
         found_record = st.session_state.response_metadata_store[clean_lookup]
-    # 2. Fallback to Google Sheets for cross-instance sharing
+    # 2. Fallback to Google Sheets for cross-instance lookup
     elif sheet_db:
         try:
             records = sheet_db.get_all_records()
@@ -166,16 +233,25 @@ if lookup_code:
 
     if found_record:
         st.sidebar.success("Found response receipt")
-        with st.sidebar.expander("View Details", expanded=True):
+        with st.sidebar.expander("View Details & Vote", expanded=True):
             st.json(found_record)
+            
+            # Sidebar Voting Widget
+            current_sb_vote = st.session_state.user_votes.get(clean_lookup, None)
+            sb_default_idx = 0 if current_sb_vote == "👍" else (1 if current_sb_vote == "👎" else None)
+            
+            sb_feedback = st.radio(
+                "Vote on this response:", 
+                ["👍", "👎"], 
+                key=f"sb_fb_{clean_lookup}", 
+                index=sb_default_idx, 
+                horizontal=True
+            )
+            if sb_feedback and sb_feedback != current_sb_vote:
+                handle_vote(clean_lookup, sb_feedback)
+                st.rerun()
     else:
         st.sidebar.error("Code not found in session history or Google Sheet.")
-
-st.sidebar.markdown("---")
-st.sidebar.info(
-    "**Note:**\n"
-    "Powered by Gemini's free tier. Might be slow, might stop working."
-)
 
 # --- 5. MAIN INTERFACE & ONBOARDING STARTER QUESTIONS ---
 st.title(f"{bank_cfg['display_name']} Agreement Assistant")
@@ -183,7 +259,7 @@ st.title(f"{bank_cfg['display_name']} Agreement Assistant")
 with st.expander("Getting started:", expanded=True):
     st.markdown(
         """
-        This tool searches official **Bank Deposit Agreements and Account Disclosures** using Retrieval-Augmented Generation (RAG). 
+        This tool searches official **Bank Deposit Agreements** using Retrieval-Augmented Generation (RAG). 
         You can ask specific questions regarding fees, requirements, interest tiers, and terms.
         
         **Sample questions you can try:**
@@ -191,6 +267,9 @@ with st.expander("Getting started:", expanded=True):
         * *What is the bank's policy regarding overdraft fees and returned items?*
         * *How are interest rates calculated and compounded for relationship tiers?*
         * *What are the requirements for closing an account or disputing a transaction?*
+
+        **Note:**
+        Powered by Gemini's free tier. Might be slow, might stop working. Takes about a minute to generate.
         """
     )
 
@@ -199,33 +278,6 @@ if not selected_col:
     st.stop()
 
 collection = chroma_client.get_collection(name=selected_col)
-
-# Initialize session state stores
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "response_metadata_store" not in st.session_state:
-    st.session_state.response_metadata_store = {}
-
-# Helper function to update votes in Google Sheets
-def update_sheet_vote(target_code, vote_type):
-    if not sheet_db:
-        return
-    try:
-        cell = sheet_db.find(target_code)
-        if cell:
-            row_idx = cell.row
-            up_col_idx = 10  # "Thumbs Up Count" column index
-            down_col_idx = 11 # "Thumbs Down Count" column index
-            
-            current_up = int(sheet_db.cell(row_idx, up_col_idx).value or 0)
-            current_down = int(sheet_db.cell(row_idx, down_col_idx).value or 0)
-            
-            if vote_type == "👍":
-                sheet_db.update_cell(row_idx, up_col_idx, current_up + 1)
-            elif vote_type == "👎":
-                sheet_db.update_cell(row_idx, down_col_idx, current_down + 1)
-    except Exception:
-        pass
 
 # Display chat history
 for idx, message in enumerate(st.session_state.messages):
@@ -237,17 +289,20 @@ for idx, message in enumerate(st.session_state.messages):
             with col_a:
                 st.caption(f"Response Code: `{code}` (Paste in sidebar to inspect)")
             with col_b:
-                # index=None keeps the radio unselected by default
+                current_vote = st.session_state.user_votes.get(code, None)
+                default_idx = 0 if current_vote == "👍" else (1 if current_vote == "👎" else None)
+                
                 feedback = st.radio(
                     "Was this helpful?", 
                     ["👍", "👎"], 
                     key=f"fb_{code}", 
-                    index=None, 
+                    index=default_idx, 
                     label_visibility="collapsed", 
                     horizontal=True
                 )
-                if feedback:
-                    update_sheet_vote(code, feedback)
+                if feedback and feedback != current_vote:
+                    handle_vote(code, feedback)
+                    st.rerun()
 
 # --- 6. RAG QUERY EXECUTION & GOOGLE SHEETS LOGGING ---
 if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."):
@@ -297,7 +352,6 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                         "content_snippet": doc[:150] + "..."
                     })
 
-                # Explicitly mandate mentioning the bank name in system instructions
                 system_instruction = (
                     f"You are a precise, helpful banking assistant representing {current_bank_name}. "
                     "Answer the user's question strictly using the provided context excerpts from the banking agreement. "
@@ -348,7 +402,7 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
 
                 st.session_state.response_metadata_store[response_code] = audit_record
 
-                # --- ACTIVE GOOGLE SHEETS WRITE (FORMATTED TO INDIVIDUAL COLUMNS) ---
+                # --- ACTIVE GOOGLE SHEETS WRITE ---
                 if sheet_db:
                     try:
                         sheet_db.append_row([
@@ -384,7 +438,8 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                     horizontal=True
                 )
                 if feedback:
-                    update_sheet_vote(response_code, feedback)
+                    handle_vote(response_code, feedback)
+                    st.rerun()
 
             except Exception as e:
                 error_msg = f"**Usage Limit / Error Encountered:** `{str(e)}`\n\nThe free-tier usage limit has been reached or a network error occurred. Please wait a moment before trying again."
