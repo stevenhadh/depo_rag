@@ -198,26 +198,6 @@ st.markdown(
         [data-testid="stSidebar"] [data-testid="stExpander"] summary:hover span {{
             color: #FFFFFF !important;
         }}
-
-        [data-testid="stSidebar"] [data-baseweb="notification"],
-        [data-testid="stSidebar"] div.st-key-success,
-        [data-testid="stSidebar"] .stSuccess {{
-            background-color: #FFFFFF !important;
-            background: #FFFFFF !important;
-            border: 1px solid #FFFFFF !important;
-        }}
-        
-        [data-testid="stSidebar"] .stSuccess p, 
-        [data-testid="stSidebar"] .stSuccess span,
-        [data-testid="stSidebar"] .stSuccess div,
-        [data-testid="stSidebar"] .stSuccess [data-testid="stMarkdownContainer"] p {{
-            color: #FFFFFF !important;
-        }}
-        
-        [data-testid="stSidebar"] .stSuccess svg {{
-            fill: #FFFFFF !important;
-            color: #FFFFFF !important;
-        }}
     """,
     unsafe_allow_html=True
 )
@@ -265,7 +245,7 @@ if lookup_code:
                 handle_vote(clean_lookup, sb_feedback)
                 st.rerun()
     else:
-        st.sidebar.success("Code not found.")
+        st.sidebar.markdown('<p style="color: #FFFFFF; font-weight: 500; margin-bottom: 0.5rem;">⚠️ Code not found.</p>', unsafe_allow_html=True)
 
 # --- 5. MAIN INTERFACE & ONBOARDING STARTER QUESTIONS ---
 st.title(f"{bank_cfg['display_name']} Agreement Assistant")
