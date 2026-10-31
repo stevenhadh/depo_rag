@@ -199,18 +199,25 @@ st.markdown(
             color: #FFFFFF !important;
         }}
 
-        /* --- SUCCESS ALERT (White) --- */
+        [data-testid="stSidebar"] [data-baseweb="notification"],
+        [data-testid="stSidebar"] div.st-key-success,
         [data-testid="stSidebar"] .stSuccess {{
             background-color: #FFFFFF !important;
-            color: #111111 !important;
-            border: 1px solid #DDDDDD !important;
+            background: #FFFFFF !important;
+            border: 1px solid #FFFFFF !important;
         }}
+        
         [data-testid="stSidebar"] .stSuccess p, 
-        [data-testid="stSidebar"] .stSuccess svg {{
-            color: #111111 !important;
-            fill: #111111 !important;
+        [data-testid="stSidebar"] .stSuccess span,
+        [data-testid="stSidebar"] .stSuccess div,
+        [data-testid="stSidebar"] .stSuccess [data-testid="stMarkdownContainer"] p {{
+            color: #FFFFFF !important;
         }}
-    </style>
+        
+        [data-testid="stSidebar"] .stSuccess svg {{
+            fill: #FFFFFF !important;
+            color: #FFFFFF !important;
+        }}
     """,
     unsafe_allow_html=True
 )
