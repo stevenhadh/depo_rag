@@ -254,13 +254,14 @@ with st.expander("Getting started:", expanded=True):
     st.markdown(
         """
         This tool searches official **Bank Deposit Agreements** using Retrieval-Augmented Generation (RAG).\n
-        You can ask specific questions regarding fees, requirements, interest tiers, and terms.
+        You can ask specific questions regarding fees, requirements, and terms.
         
         **Sample questions you can try:**
-        * *What are the monthly maintenance fees and how can they be waived?*
-        * *What is the bank's policy regarding overdraft fees and returned items?*
-        * *How are interest rates calculated and compounded for relationship tiers?*
-        * *What are the requirements for closing an account or disputing a transaction?*
+        * *What documents do I need to open a new account?*
+        * *How many days do I have to report an unauthorized charge on my statement?*
+        * *Will I be charged a fee if I use an ATM outside of the bank's network?*
+        * *If an account holder passes away, what happens to the money?*
+        * *How much is the fee if my account goes negative?*
 
         **Note:**
         Powered by Gemini's free tier. Takes a minute or two to generate.
