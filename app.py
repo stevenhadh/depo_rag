@@ -182,11 +182,33 @@ st.markdown(
         [data-testid="stSidebar"] .stMarkdown {{
             color: #FFFFFF !important;
         }}
-    /* --- 2. STATIC EXPANDER FIX (Removes Hover Color Changes) --- */
-        [data-testid="stSidebar"] [data-testid="stExpander"] {{
-            background-color: rgba(255, 255, 255, 0.1) !important;
-            border: 1px solid rgba(255, 255, 255, 0.3) !important;
-            border-radius: 6px;
+        
+        /* Keep default expander look, but lock the header hover state so it doesn't change color */
+        [data-testid="stSidebar"] [data-testid="stExpander"] summary {{
+            background-color: transparent !important;
+            color: #FFFFFF !important;
+        }}
+        
+        [data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {{
+            background-color: transparent !important;
+            color: #FFFFFF !important;
+        }}
+        
+        [data-testid="stSidebar"] [data-testid="stExpander"] summary:hover p,
+        [data-testid="stSidebar"] [data-testid="stExpander"] summary:hover span {{
+            color: #FFFFFF !important;
+        }}
+
+        /* --- SUCCESS ALERT (White) --- */
+        [data-testid="stSidebar"] .stSuccess {{
+            background-color: #FFFFFF !important;
+            color: #111111 !important;
+            border: 1px solid #DDDDDD !important;
+        }}
+        [data-testid="stSidebar"] .stSuccess p, 
+        [data-testid="stSidebar"] .stSuccess svg {{
+            color: #111111 !important;
+            fill: #111111 !important;
         }}
     </style>
     """,
@@ -236,7 +258,7 @@ if lookup_code:
                 handle_vote(clean_lookup, sb_feedback)
                 st.rerun()
     else:
-        st.sidebar.warning("Code not found.")
+        st.sidebar.success("Code not found.")
 
 # --- 5. MAIN INTERFACE & ONBOARDING STARTER QUESTIONS ---
 st.title(f"{bank_cfg['display_name']} Agreement Assistant")
