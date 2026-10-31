@@ -182,44 +182,6 @@ st.markdown(
         [data-testid="stSidebar"] .stMarkdown {{
             color: #FFFFFF !important;
         }}
-    /* --- 2. EXPANDER FIX (Readable text & translucent container) --- */
-        [data-testid="stSidebar"] [data-testid="stExpander"] {{
-            background-color: rgba(255, 255, 255, 0.1) !important;
-            border: 1px solid rgba(255, 255, 255, 0.3) !important;
-            border-radius: 6px;
-        }}
-        [data-testid="stSidebar"] [data-testid="stExpander"] summary,
-        [data-testid="stSidebar"] [data-testid="stExpander"] summary p,
-        [data-testid="stSidebar"] [data-testid="stExpander"] span {{
-            color: #FFFFFF !important;
-        }}
-        [data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {{
-            background-color: rgba(255, 255, 255, 0.2) !important;
-        }}
-
-        /* --- 3. SUCCESS ALERT (Changed from Green to Clean White) --- */
-        [data-testid="stSidebar"] .stSuccess {{
-            background-color: #FFFFFF !important;
-            color: #111111 !important;
-            border: 1px solid #DDDDDD !important;
-        }}
-        [data-testid="stSidebar"] .stSuccess p, 
-        [data-testid="stSidebar"] .stSuccess svg {{
-            color: #111111 !important;
-            fill: #111111 !important;
-        }}
-
-        /* --- 4. ERROR ALERT (Changed from Red to Neutral Gray) --- */
-        [data-testid="stSidebar"] .stError {{
-            background-color: #E5E7EB !important;
-            color: #1F2937 !important;
-            border: 1px solid #9CA3AF !important;
-        }}
-        [data-testid="stSidebar"] .stError p, 
-        [data-testid="stSidebar"] .stError svg {{
-            color: #1F2937 !important;
-            fill: #1F2937 !important;
-        }}
     </style>
     """,
     unsafe_allow_html=True
@@ -249,7 +211,7 @@ if lookup_code:
             pass
 
     if found_record:
-        st.sidebar.success("Found response receipt")
+        # st.sidebar.success("Found response receipt")
         with st.sidebar.expander("View Details", expanded=True):
             st.json(found_record)
             
@@ -268,7 +230,7 @@ if lookup_code:
                 handle_vote(clean_lookup, sb_feedback)
                 st.rerun()
     else:
-        st.sidebar.error("Code not found in session history or Google Sheet.")
+        st.sidebar.info("Code not found.")
 
 # --- 5. MAIN INTERFACE & ONBOARDING STARTER QUESTIONS ---
 st.title(f"{bank_cfg['display_name']} Agreement Assistant")
