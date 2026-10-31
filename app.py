@@ -282,7 +282,7 @@ for idx, message in enumerate(st.session_state.messages):
             code = message["response_code"]
             col_a, col_b = st.columns([3, 1])
             with col_a:
-                # st.caption(f"Response Code: `{code}` (Paste in sidebar to inspect)")
+                st.caption(f"Was this helpful?")
             with col_b:
                 current_vote = st.session_state.user_votes.get(code, None)
                 default_idx = 0 if current_vote == "👍" else (1 if current_vote == "👎" else None)
