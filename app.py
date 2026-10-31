@@ -30,16 +30,13 @@ chroma_client = get_chroma_client()
 @st.cache_resource
 def get_gspread_sheet():
     try:
-        # Pulls service account dictionary directly from Streamlit secrets
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         
-        # Load credentials from st.secrets
         if "gcp_service_account" in st.secrets:
             creds_dict = dict(st.secrets["gcp_service_account"])
             creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
             gc = gspread.authorize(creds)
             
-            # Open the Google Sheet by name (Ensure you share this sheet with your service account email)
             sheet_name = st.secrets.get("GOOGLE_SHEET_NAME", "depo_rag_receipts")
             sheet = gc.open(sheet_name).sheet1
             return sheet
@@ -50,6 +47,23 @@ def get_gspread_sheet():
         return None
 
 sheet_db = get_gspread_sheet()
+
+# --- HELPER: ENSURE SHEET HEADERS EXIST ---
+def init_sheet_headers(sheet):
+    try:
+        header = sheet.row_values(1)
+        expected_headers = [
+            "Timestamp", "Response Code", "Bank Institution", "User Query", 
+            "LLM Model", "Embedding Model", "Temperature", "Chunks Referenced", 
+            "Assistant Response", "Thumbs Up Count", "Thumbs Down Count"
+        ]
+        if not header:
+            sheet.append_row(expected_headers)
+    except Exception:
+        pass
+
+if sheet_db:
+    init_sheet_headers(sheet_db)
 
 # --- 3. MAPPINGS & CONFIGS ---
 BANK_CONFIGS = {
@@ -101,7 +115,7 @@ else:
     selected_col = st.sidebar.selectbox("Select your bank:", list(col_display_map.keys()), format_func=lambda x: col_display_map[x])
     bank_cfg = get_bank_config(selected_col)
 
-# --- APPLY SIDEBAR SPLIT GRADIENT (Top = Accent, Bottom = Primary) ---
+# --- APPLY SIDEBAR SPLIT GRADIENT ---
 st.markdown(
     f"""
     <style>
@@ -129,17 +143,33 @@ st.markdown(
 
 st.sidebar.markdown("---")
 
-# --- UNIQUE RESPONSE CODE LOOKUP SECTION ---
+# --- UNIQUE RESPONSE CODE LOOKUP SECTION (LOCAL + GOOGLE SHEETS) ---
 st.sidebar.subheader("Response Inspector")
 lookup_code = st.sidebar.text_input("Enter Response Code:", placeholder="e.g., RAG-A1B2C3")
 if lookup_code:
-    if "response_metadata_store" in st.session_state and lookup_code.strip() in st.session_state.response_metadata_store:
+    clean_lookup = lookup_code.strip()
+    found_record = None
+    
+    # 1. Check local session state first
+    if "response_metadata_store" in st.session_state and clean_lookup in st.session_state.response_metadata_store:
+        found_record = st.session_state.response_metadata_store[clean_lookup]
+    # 2. Fallback to Google Sheets for cross-instance sharing
+    elif sheet_db:
+        try:
+            records = sheet_db.get_all_records()
+            for row in records:
+                if str(row.get("Response Code", "")).strip() == clean_lookup:
+                    found_record = row
+                    break
+        except Exception:
+            pass
+
+    if found_record:
         st.sidebar.success("Found response receipt")
-        meta_record = st.session_state.response_metadata_store[lookup_code.strip()]
         with st.sidebar.expander("View Details", expanded=True):
-            st.json(meta_record)
+            st.json(found_record)
     else:
-        st.sidebar.error("Code not found in session history.")
+        st.sidebar.error("Code not found in session history or Google Sheet.")
 
 st.sidebar.markdown("---")
 st.sidebar.info(
@@ -176,6 +206,27 @@ if "messages" not in st.session_state:
 if "response_metadata_store" not in st.session_state:
     st.session_state.response_metadata_store = {}
 
+# Helper function to update votes in Google Sheets
+def update_sheet_vote(target_code, vote_type):
+    if not sheet_db:
+        return
+    try:
+        cell = sheet_db.find(target_code)
+        if cell:
+            row_idx = cell.row
+            up_col_idx = 10  # "Thumbs Up Count" column index
+            down_col_idx = 11 # "Thumbs Down Count" column index
+            
+            current_up = int(sheet_db.cell(row_idx, up_col_idx).value or 0)
+            current_down = int(sheet_db.cell(row_idx, down_col_idx).value or 0)
+            
+            if vote_type == "👍":
+                sheet_db.update_cell(row_idx, up_col_idx, current_up + 1)
+            elif vote_type == "👎":
+                sheet_db.update_cell(row_idx, down_col_idx, current_down + 1)
+    except Exception:
+        pass
+
 # Display chat history
 for idx, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
@@ -186,7 +237,18 @@ for idx, message in enumerate(st.session_state.messages):
             with col_a:
                 st.caption(f"Response Code: `{code}` (Paste in sidebar to inspect)")
             with col_b:
-                feedback = st.radio("Was this helpful?", ["👍", "👎"], key=f"fb_{code}", label_visibility="collapsed", horizontal=True)
+                # index=None keeps the radio unselected by default
+                feedback = st.radio(
+                    "Was this helpful?", 
+                    ["👍", "👎"], 
+                    key=f"fb_{code}", 
+                    index=None, 
+                    label_visibility="collapsed", 
+                    horizontal=True
+                )
+                if feedback:
+                    update_sheet_vote(code, feedback)
+
 # --- 6. RAG QUERY EXECUTION & GOOGLE SHEETS LOGGING ---
 if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -200,6 +262,7 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                 temperature = 0.2
                 llm_model = "gemini-3.8-flash"
                 embedding_model = "all-MiniLM-L6-v2"
+                current_bank_name = bank_cfg['display_name']
 
                 # Retrieve relevant context from ChromaDB
                 results = collection.query(
@@ -221,11 +284,12 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                     page = meta.get("start_page", "Unknown")
                     path = meta.get("path", "N/A")
                     
-                    context_block += f"\n--- Section: {title} (Page {page}) ---\n{doc}\n"
+                    context_block += f"\n--- Institution: {current_bank_name} | Section: {title} (Page {page}) ---\n{doc}\n"
                     sources_cited.add(f"• **{title}** (Page {page})")
                     
                     chunks_referenced_audit.append({
                         "chunk_index": doc_idx + 1,
+                        "bank": current_bank_name,
                         "section_title": title,
                         "page": page,
                         "toc_path": path,
@@ -233,14 +297,17 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                         "content_snippet": doc[:150] + "..."
                     })
 
+                # Explicitly mandate mentioning the bank name in system instructions
                 system_instruction = (
-                    "You are a precise, helpful banking assistant. Answer the user's question "
-                    "strictly using the provided context excerpts from the banking agreement. "
+                    f"You are a precise, helpful banking assistant representing {current_bank_name}. "
+                    "Answer the user's question strictly using the provided context excerpts from the banking agreement. "
                     "If the answer cannot be found in the context, state clearly that the document does not cover it. "
-                    "Always state the name of the bank, and cite the relevant section title and page number."
+                    f"You must explicitly state that you are answering on behalf of {current_bank_name} in your response, "
+                    "and cite the relevant section title and page number."
                 )
 
                 user_prompt = (
+                    f"Target Bank: {current_bank_name}\n"
                     f"Question: {prompt}\n\n"
                     f"Retrieved Document Context:\n{context_block}"
                 )
@@ -265,7 +332,7 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                 audit_record = {
                     "response_code": response_code,
                     "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "bank_institution": bank_cfg["display_name"],
+                    "bank_institution": current_bank_name,
                     "collection_name": selected_col,
                     "user_query": prompt,
                     "llm_model": llm_model,
@@ -275,13 +342,13 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                         "top_k_results": n_results
                     },
                     "assistant_response": answer_text,
-                    "chunks_referenced": chunks_referenced_audit,
-                    "sources_cited": list(sources_cited)
+                    "chunks_referenced": str(chunks_referenced_audit),
+                    "sources_cited": str(list(sources_cited))
                 }
 
                 st.session_state.response_metadata_store[response_code] = audit_record
 
-                # --- ACTIVE GOOGLE SHEETS WRITE ---
+                # --- ACTIVE GOOGLE SHEETS WRITE (FORMATTED TO INDIVIDUAL COLUMNS) ---
                 if sheet_db:
                     try:
                         sheet_db.append_row([
@@ -289,8 +356,13 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                             audit_record["response_code"],
                             audit_record["bank_institution"],
                             audit_record["user_query"],
-                            str(audit_record["chunks_referenced"]),
-                            "Pending Feedback"
+                            audit_record["llm_model"],
+                            audit_record["embedding_model"],
+                            str(audit_record["parameters"]),
+                            audit_record["chunks_referenced"],
+                            audit_record["assistant_response"],
+                            0, # Initial Thumbs Up Count
+                            0  # Initial Thumbs Down Count
                         ])
                     except Exception as sheet_err:
                         st.sidebar.warning(f"Could not write to Google Sheet: {sheet_err}")
@@ -303,7 +375,16 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                     "response_code": response_code
                 })
                 
-                st.radio("Was this helpful?", ["👍", "👎"], key=f"fb_{response_code}", label_visibility="collapsed", horizontal=True)
+                feedback = st.radio(
+                    "Was this helpful?", 
+                    ["👍", "👎"], 
+                    key=f"fb_{response_code}", 
+                    index=None, 
+                    label_visibility="collapsed", 
+                    horizontal=True
+                )
+                if feedback:
+                    update_sheet_vote(response_code, feedback)
 
             except Exception as e:
                 error_msg = f"**Usage Limit / Error Encountered:** `{str(e)}`\n\nThe free-tier usage limit has been reached or a network error occurred. Please wait a moment before trying again."
