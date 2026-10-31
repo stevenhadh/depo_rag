@@ -248,12 +248,13 @@ if lookup_code:
         st.sidebar.markdown('<p style="color: #FFFFFF; font-weight: 500; margin-bottom: 0.5rem;">⚠️ Code not found.</p>', unsafe_allow_html=True)
 
 # --- 5. MAIN INTERFACE & ONBOARDING STARTER QUESTIONS ---
-st.title(f"{bank_cfg['display_name']} Agreement Assistant")
+# st.title(f"{bank_cfg['display_name']} Agreement Assistant")
+st.title(f"bankBot")
 
 with st.expander("Getting started:", expanded=True):
     st.markdown(
         """
-        This tool searches official **Bank Deposit Agreements** using Retrieval-Augmented Generation (RAG).\n
+        This tool searches official banks' **Deposit Account Agreements** using Retrieval-Augmented Generation (RAG).\n
         You can ask specific questions regarding fees, requirements, and terms.
         
         **Sample questions you can try:**
