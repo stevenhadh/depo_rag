@@ -253,7 +253,7 @@ st.title(f"{bank_cfg['display_name']} Agreement Assistant")
 with st.expander("Getting started:", expanded=True):
     st.markdown(
         """
-        This tool searches official **Bank Deposit Agreements** using Retrieval-Augmented Generation (RAG). 
+        This tool searches official **Bank Deposit Agreements** using Retrieval-Augmented Generation (RAG).\n
         You can ask specific questions regarding fees, requirements, interest tiers, and terms.
         
         **Sample questions you can try:**
@@ -263,7 +263,7 @@ with st.expander("Getting started:", expanded=True):
         * *What are the requirements for closing an account or disputing a transaction?*
 
         **Note:**
-        Powered by Gemini's free tier. Might be slow, might stop working. Takes about a minute to generate.
+        Powered by Gemini's free tier. Takes a minute or two to generate.
         """
     )
 
@@ -308,8 +308,8 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
         with st.spinner("Searching document sections and generating response..."):
             try:
                 n_results = 3
-                temperature = 0.2
-                llm_model = "gemini-3.8-flash"
+                temperature = 0
+                llm_model = "gemini-3.5-flash-lite"
                 embedding_model = "all-MiniLM-L6-v2"
                 current_bank_name = bank_cfg['display_name']
 
@@ -366,6 +366,7 @@ if prompt := st.chat_input(f"Ask a question about {bank_cfg['display_name']}..."
                     config=types.GenerateContentConfig(
                         system_instruction=system_instruction,
                         temperature=temperature,
+                        thinking_config=types.ThinkingConfig(thinking_level="minimal"),
                     ),
                 )
                 
